@@ -1,0 +1,1070 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Part Number Lookup — Daifuku</title>
+  <script src="https://cdn.jsdelivr.net/npm/fflate@0.8.2/umd/index.min.js"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <style>
+    /* Daifuku brand: Blue R81 G72 B157, Gray R26 G26 B26 */
+    :root {
+      --daifuku-blue: #51489d;
+      --daifuku-blue-dark: #3f3879;
+      --daifuku-blue-light: #6b62b3;
+      --daifuku-gray: #1a1a1a;
+      --daifuku-gray-mid: #595757;
+      --bg: #f3f2f8;
+      --surface: #ffffff;
+      --surface-alt: #faf9fc;
+      --border: #cec9e0;
+      --border-strong: #51489d;
+      --text: #1a1a1a;
+      --muted: #595757;
+      --primary: var(--daifuku-blue);
+      --primary-hover: var(--daifuku-blue-dark);
+      --success: #2d6a4f;
+      --success-bg: #e8f5ee;
+      --warn: #7c4a03;
+      --warn-bg: #faf3e6;
+      --danger: #9b2335;
+      --danger-bg: #fce8ec;
+      --radius: 8px;
+      --shadow: 0 2px 8px rgba(81, 72, 157, 0.1);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+
+    .page {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 1.25rem 1rem 3rem;
+    }
+
+    header {
+      margin-bottom: 1.5rem;
+      padding-bottom: 1.25rem;
+      border-bottom: 3px solid var(--daifuku-blue);
+    }
+
+    header h1 {
+      margin: 0 0 0.35rem;
+      font-size: 1.6rem;
+      font-weight: 650;
+      color: var(--daifuku-blue);
+      letter-spacing: -0.02em;
+    }
+
+    header p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+    }
+
+    .step-label {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin: 0 0 0.75rem;
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: var(--daifuku-gray);
+    }
+
+    .step-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 1.6rem;
+      height: 1.6rem;
+      border-radius: 999px;
+      background: var(--primary);
+      color: #fff;
+      font-size: 0.85rem;
+      font-weight: 700;
+    }
+
+    .hint {
+      margin: 0 0 0.85rem;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    label.file-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.55rem 1rem;
+      background: var(--primary);
+      color: #fff;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.95rem;
+      border: none;
+    }
+
+    label.file-btn:hover { background: var(--primary-hover); }
+
+    input[type="file"] { display: none; }
+
+    .status {
+      margin-top: 0.75rem;
+      padding: 0.65rem 0.85rem;
+      border-radius: 8px;
+      font-size: 0.92rem;
+      display: none;
+    }
+
+    .status.show { display: block; }
+    .status.ok { background: var(--success-bg); color: var(--success); }
+    .status.warn { background: var(--warn-bg); color: var(--warn); }
+    .status.err { background: var(--danger-bg); color: var(--danger); }
+
+    textarea {
+      width: 100%;
+      min-height: 140px;
+      padding: 0.75rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+      font-size: 0.9rem;
+      resize: vertical;
+    }
+
+    textarea:focus {
+      outline: none;
+      border-color: var(--daifuku-blue-light);
+      box-shadow: 0 0 0 3px rgba(81, 72, 157, 0.15);
+    }
+
+    textarea:disabled {
+      background: var(--surface-alt);
+      color: var(--muted);
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.6rem;
+      margin-top: 0.85rem;
+    }
+
+    button {
+      padding: 0.55rem 1rem;
+      border: none;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 0.95rem;
+      cursor: pointer;
+    }
+
+    button.primary { background: var(--primary); color: #fff; }
+    button.primary:hover:not(:disabled) { background: var(--primary-hover); }
+    button.secondary {
+      background: #e6e4f0;
+      color: var(--daifuku-gray);
+      border: 1px solid var(--border);
+    }
+    button.secondary:hover:not(:disabled) { background: #d8d5e8; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(26, 26, 26, 0.45);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      padding: 1rem;
+    }
+
+    .overlay.show { display: flex; }
+
+    .spinner-box {
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 1.5rem 2rem;
+      text-align: center;
+      box-shadow: 0 8px 24px rgba(81, 72, 157, 0.2);
+      max-width: 320px;
+    }
+
+    .spinner {
+      width: 42px;
+      height: 42px;
+      border: 4px solid #e6e4f0;
+      border-top-color: var(--daifuku-blue);
+      border-radius: 50%;
+      margin: 0 auto 0.85rem;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .stats {
+      margin: 0 0 0.75rem;
+      font-size: 0.95rem;
+      color: var(--muted);
+    }
+
+    .stats strong { color: var(--text); }
+
+    .table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+      min-width: 640px;
+    }
+
+    th, td {
+      padding: 0.5rem 0.65rem;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+
+    th {
+      background: #ebe9f4;
+      color: var(--daifuku-gray);
+      font-weight: 600;
+      white-space: nowrap;
+      position: sticky;
+      top: 0;
+    }
+
+    tbody tr:nth-child(even) td {
+      background: var(--surface-alt);
+    }
+
+    tr:last-child td { border-bottom: none; }
+
+    .not-found {
+      color: var(--danger);
+      font-weight: 600;
+    }
+
+    .empty-results {
+      color: var(--muted);
+      font-style: italic;
+      padding: 0.5rem 0;
+    }
+
+    .copy-block {
+      margin-bottom: 1rem;
+      padding: 1rem;
+      background: var(--surface-alt);
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--daifuku-blue);
+      border-radius: 8px;
+    }
+
+    .copy-block h3 {
+      margin: 0 0 0.35rem;
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--daifuku-blue);
+    }
+
+    .copy-block .hint {
+      margin-bottom: 0.65rem;
+    }
+
+    #copyOutput {
+      min-height: 100px;
+      max-height: 220px;
+      background: var(--surface);
+    }
+
+    @media (max-width: 600px) {
+      header h1 { font-size: 1.35rem; }
+      .card { padding: 1rem; }
+      table { font-size: 0.82rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header>
+      <h1>Part Number Lookup</h1>
+      <p>Upload your product master file, paste part numbers to search, and download matched results.</p>
+    </header>
+
+    <section class="card" id="step1">
+      <h2 class="step-label"><span class="step-num">1</span> Step 1: Upload Master File</h2>
+      <p class="hint">Upload an Excel workbook (.xlsx). Data stays in your browser for this session only.</p>
+      <label class="file-btn" for="masterFile">Choose Excel file</label>
+      <input type="file" id="masterFile" accept=".xlsx,.xls" />
+      <div class="status" id="uploadStatus" role="status"></div>
+    </section>
+
+    <section class="card" id="step2">
+      <h2 class="step-label"><span class="step-num">2</span> Step 2: Paste Part Numbers</h2>
+      <p class="hint">Enter one part number per line.</p>
+      <textarea id="partInput" placeholder="Paste part numbers here, one per line&#10;TL504KQ&#10;2904467" disabled></textarea>
+      <div class="actions">
+        <button class="primary" id="searchBtn" type="button" disabled>Search</button>
+        <button class="secondary" id="downloadBtn" type="button" disabled>Download Results</button>
+      </div>
+      <p class="stats" id="searchStats" hidden></p>
+      <div id="copyOutputBlock" class="copy-block" hidden>
+        <h3>Copy internal part numbers</h3>
+        <p class="hint">One part number per line, in the same order as your pasted list. Select all or use Copy, then paste into Excel.</p>
+        <textarea id="copyOutput" readonly aria-label="Internal part numbers for copy and paste"></textarea>
+        <div class="actions">
+          <button type="button" class="secondary" id="copyOutputBtn">Copy to clipboard</button>
+        </div>
+      </div>
+      <div id="resultsArea">
+        <p class="empty-results">Upload a master file and run a search to see results.</p>
+      </div>
+    </section>
+  </div>
+
+  <div class="overlay" id="loadingOverlay" aria-live="polite" aria-busy="true">
+    <div class="spinner-box">
+      <div class="spinner" aria-hidden="true"></div>
+      <p id="loadingMessage">Loading…</p>
+    </div>
+  </div>
+
+  <script>
+    // ─── Configuration (edit these for your master sheet) ───
+    const LOOKUP_COLUMNS = [
+      "FullSKU",
+      "ManufacturerPartNumber",
+      "scManufacturerPartNumber",
+      "scDaifukuJapanPartNumber"
+    ];
+    // Columns searched by exact phrase within cell text (not substring of a longer token)
+    const DESCRIPTION_LOOKUP_COLUMNS = ["sMaterialDescription"];
+    const RETURN_COLUMNS = [
+      "FullSKU",
+      "ProductName",
+      "Description",
+      "ManufacturerName",
+      "ManufacturerPartNumber",
+      "Cost",
+      "Price"
+    ];
+    // Internal company part number column shown in results (first RETURN column is typical)
+    const INTERNAL_PART_COLUMN = "FullSKU";
+    // Column used for the copy-paste output (null = INTERNAL_PART_COLUMN)
+    const COPY_OUTPUT_COLUMN = null;
+    // Text for unmatched lines in copy output
+    const COPY_NOT_FOUND_PLACEHOLDER = "not found";
+    // Columns to read from Excel (null = auto from settings above). Fewer columns = faster load.
+    const LOAD_COLUMNS = null;
+    // Example minimal load (uncomment and trim RETURN_COLUMNS to match):
+    // const LOAD_COLUMNS = ["FullSKU", "ManufacturerPartNumber", "scDaifukuJapanPartNumber"];
+    // ─────────────────────────────────────────────────────────
+
+    const HEADER_SCAN_ROWS = 10;
+    const YIELD_EVERY_ROWS = 8000;
+
+    let masterIndex = null;
+    let descriptionRows = null;
+    let columnMap = null;
+    let resolvedReturnColumns = [];
+    let lastResults = [];
+
+    const masterFileInput = document.getElementById("masterFile");
+    const uploadStatus = document.getElementById("uploadStatus");
+    const partInput = document.getElementById("partInput");
+    const searchBtn = document.getElementById("searchBtn");
+    const downloadBtn = document.getElementById("downloadBtn");
+    const searchStats = document.getElementById("searchStats");
+    const resultsArea = document.getElementById("resultsArea");
+    const copyOutputBlock = document.getElementById("copyOutputBlock");
+    const copyOutput = document.getElementById("copyOutput");
+    const copyOutputBtn = document.getElementById("copyOutputBtn");
+    const loadingOverlay = document.getElementById("loadingOverlay");
+    const loadingMessage = document.getElementById("loadingMessage");
+
+    function getCopyOutputColumn() {
+      return COPY_OUTPUT_COLUMN || INTERNAL_PART_COLUMN;
+    }
+
+    function normalizeKey(value) {
+      return String(value ?? "").trim().toLowerCase();
+    }
+
+    // True when phrase appears in cell as its own token (e.g. "Light 1234" ≠ "Light 12345")
+    function cellContainsExactPhrase(cell, phrase) {
+      const text = String(cell ?? "");
+      const term = String(phrase ?? "").trim();
+      if (!term) return false;
+
+      const lowerText = text.toLowerCase();
+      const lowerTerm = term.toLowerCase();
+      let start = 0;
+
+      while (start <= lowerText.length - lowerTerm.length) {
+        const idx = lowerText.indexOf(lowerTerm, start);
+        if (idx === -1) return false;
+
+        const before = idx === 0 ? "" : lowerText[idx - 1];
+        const afterIdx = idx + lowerTerm.length;
+        const after = afterIdx >= lowerText.length ? "" : lowerText[afterIdx];
+        const isAlnum = (ch) => /[a-z0-9]/i.test(ch);
+
+        if ((!before || !isAlnum(before)) && (!after || !isAlnum(after))) return true;
+        start = idx + 1;
+      }
+      return false;
+    }
+
+    function lookupHit(query) {
+      const trimmed = String(query ?? "").trim();
+      if (!trimmed) return null;
+
+      const exact = masterIndex.get(normalizeKey(trimmed));
+      if (exact) return exact;
+
+      if (!descriptionRows) return null;
+      for (const entry of descriptionRows) {
+        if (cellContainsExactPhrase(entry.text, trimmed)) {
+          return { row: entry.row, matchedVia: entry.name };
+        }
+      }
+      return null;
+    }
+
+    function showLoading(message) {
+      loadingMessage.textContent = message;
+      loadingOverlay.classList.add("show");
+      loadingOverlay.setAttribute("aria-busy", "true");
+    }
+
+    function hideLoading() {
+      loadingOverlay.classList.remove("show");
+      loadingOverlay.setAttribute("aria-busy", "false");
+    }
+
+    function setUploadStatus(message, type) {
+      uploadStatus.textContent = message;
+      uploadStatus.className = "status show " + type;
+    }
+
+    function getHeaderScanColumns() {
+      return [...LOOKUP_COLUMNS, ...DESCRIPTION_LOOKUP_COLUMNS];
+    }
+
+    function getColumnsToLoad() {
+      if (Array.isArray(LOAD_COLUMNS) && LOAD_COLUMNS.length > 0) {
+        return [...new Set(LOAD_COLUMNS)];
+      }
+      return [...new Set([
+        INTERNAL_PART_COLUMN,
+        ...LOOKUP_COLUMNS,
+        ...DESCRIPTION_LOOKUP_COLUMNS,
+        ...RETURN_COLUMNS
+      ])];
+    }
+
+    function colIndexToLetters(index) {
+      let n = index + 1;
+      let letters = "";
+      while (n > 0) {
+        const rem = (n - 1) % 26;
+        letters = String.fromCharCode(65 + rem) + letters;
+        n = Math.floor((n - 1) / 26);
+      }
+      return letters;
+    }
+
+    function colLetterToIndex(letters) {
+      let n = 0;
+      for (const ch of letters) n = n * 26 + (ch.charCodeAt(0) - 64);
+      return n - 1;
+    }
+
+    function decodeXmlEntities(text) {
+      return String(text)
+        .replace(/&amp;/g, "&")
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">")
+        .replace(/&quot;/g, '"')
+        .replace(/&apos;/g, "'");
+    }
+
+    function parseSharedStringsXml(xml) {
+      if (!xml) return [];
+      const strings = [];
+      const parts = xml.split(/<si[>\s]/);
+      for (let i = 1; i < parts.length; i++) {
+        const part = parts[i];
+        const end = part.indexOf("</si>");
+        const body = end >= 0 ? part.slice(0, end) : part;
+        let text = "";
+        const re = /<t(?:\s[^>]*)?>([^<]*)<\/t>/g;
+        let match;
+        while ((match = re.exec(body)) !== null) text += match[1];
+        strings.push(decodeXmlEntities(text));
+      }
+      return strings;
+    }
+
+    function parseCellsFromRowChunk(chunk, sharedStrings, wantedLetters) {
+      const cells = [];
+      const cellRe = /<c\s([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g;
+      let match;
+      while ((match = cellRe.exec(chunk)) !== null) {
+        const attrs = match[1];
+        const inner = match[2] || "";
+        const ref = attrs.match(/\br="([A-Z]+)(\d+)"/);
+        if (!ref) continue;
+        const col = ref[1];
+        if (wantedLetters && !wantedLetters.has(col)) continue;
+
+        const type = (attrs.match(/\bt="([^"]+)"/) || [])[1];
+        let raw = "";
+        const vm = inner.match(/<v>([^<]*)<\/v>/);
+        if (vm) raw = vm[1];
+
+        let value = raw;
+        if (type === "s") value = sharedStrings[parseInt(raw, 10)] ?? "";
+        else if (type === "inlineStr" || type === "str") {
+          const tm = inner.match(/<t[^>]*>([^<]*)<\/t>/);
+          value = tm ? tm[1] : "";
+        } else if (type === "b") value = raw === "1" ? "TRUE" : "FALSE";
+
+        cells.push({ col, value: String(value ?? "") });
+      }
+      return cells;
+    }
+
+    function cellsToWideRow(cells) {
+      let maxIdx = -1;
+      for (const cell of cells) {
+        maxIdx = Math.max(maxIdx, colLetterToIndex(cell.col));
+      }
+      if (maxIdx < 0) return [];
+      const row = new Array(maxIdx + 1).fill("");
+      for (const cell of cells) {
+        row[colLetterToIndex(cell.col)] = cell.value;
+      }
+      return row;
+    }
+
+    function findHeaderRowIndex(rows, lookupColumns) {
+      const targets = new Set(lookupColumns.map((col) => normalizeKey(col)));
+      const limit = Math.min(rows.length, HEADER_SCAN_ROWS);
+      for (let i = 0; i < limit; i++) {
+        const row = rows[i];
+        if (!row) continue;
+        for (const cell of row) {
+          if (targets.has(normalizeKey(cell))) return i;
+        }
+      }
+      return -1;
+    }
+
+    function buildColumnMap(headerRow) {
+      const map = Object.create(null);
+      headerRow.forEach((name, idx) => {
+        const key = String(name ?? "").trim();
+        if (key && map[key] === undefined) map[key] = idx;
+      });
+      return map;
+    }
+
+    function resolveReturnColumns(colMap) {
+      const cols = [INTERNAL_PART_COLUMN];
+      for (const name of RETURN_COLUMNS) {
+        if (name !== INTERNAL_PART_COLUMN && !cols.includes(name)) cols.push(name);
+      }
+      return cols.filter((name) => colMap[name] !== undefined);
+    }
+
+    function cellValue(row, colName) {
+      const idx = columnMap[colName];
+      if (idx === undefined) return "";
+      const v = row[idx];
+      return v === undefined || v === null ? "" : v;
+    }
+
+    function buildSlimColumnMaps(headerWideRow, wideColMap, columnsToLoad) {
+      const slimColMap = Object.create(null);
+      const wantedLetters = new Set();
+      const missing = [];
+
+      columnsToLoad.forEach((name, slimIdx) => {
+        const wideIdx = wideColMap[name];
+        if (wideIdx === undefined) {
+          missing.push(name);
+          return;
+        }
+        slimColMap[name] = slimIdx;
+        wantedLetters.add(colIndexToLetters(wideIdx));
+      });
+
+      if (missing.length > 0) {
+        throw new Error("Column(s) not found in master file: " + missing.join(", "));
+      }
+
+      const letterToSlimIdx = Object.create(null);
+      columnsToLoad.forEach((name, slimIdx) => {
+        const wideIdx = wideColMap[name];
+        if (wideIdx !== undefined) {
+          letterToSlimIdx[colIndexToLetters(wideIdx)] = slimIdx;
+        }
+      });
+
+      return { slimColMap, wantedLetters, letterToSlimIdx, columnCount: columnsToLoad.length };
+    }
+
+    function buildSlimRow(cells, wantedLetters, letterToSlimIdx, columnCount) {
+      const row = new Array(columnCount).fill("");
+      for (const cell of cells) {
+        if (!wantedLetters.has(cell.col)) continue;
+        const slimIdx = letterToSlimIdx[cell.col];
+        if (slimIdx !== undefined) row[slimIdx] = cell.value;
+      }
+      return row;
+    }
+
+    function buildMasterIndexFromRows(rows, colMap) {
+      const lookupCols = LOOKUP_COLUMNS.map((name) => {
+        const idx = colMap[name];
+        if (idx === undefined) {
+          throw new Error('Lookup column "' + name + '" was not found in the master file.');
+        }
+        return { name, idx };
+      });
+
+      const descriptionCols = DESCRIPTION_LOOKUP_COLUMNS.map((name) => {
+        const idx = colMap[name];
+        if (idx === undefined) {
+          throw new Error('Description lookup column "' + name + '" was not found in the master file.');
+        }
+        return { name, idx };
+      });
+
+      const index = new Map();
+      const descRows = [];
+      let dataRows = 0;
+
+      for (const row of rows) {
+        if (!row.some((c) => String(c ?? "").trim())) continue;
+        dataRows++;
+
+        for (const { name, idx } of lookupCols) {
+          const key = normalizeKey(row[idx]);
+          if (!key) continue;
+          if (!index.has(key)) index.set(key, { row, matchedVia: name });
+        }
+
+        for (const { name, idx } of descriptionCols) {
+          const text = String(row[idx] ?? "").trim();
+          if (text) descRows.push({ row, name, text });
+        }
+      }
+
+      return { index, descriptionRows: descRows, dataRows };
+    }
+
+    function isXlsxZip(buffer) {
+      const bytes = new Uint8Array(buffer, 0, 2);
+      return bytes[0] === 0x50 && bytes[1] === 0x4b;
+    }
+
+    async function parseMasterWorkbookFast(arrayBuffer, onProgress) {
+      if (typeof fflate === "undefined") {
+        throw new Error("fflate library not loaded");
+      }
+
+      onProgress?.("Unpacking workbook…");
+      const files = fflate.unzipSync(new Uint8Array(arrayBuffer));
+      const sheetPath =
+        files["xl/worksheets/sheet1.xml"] !== undefined
+          ? "xl/worksheets/sheet1.xml"
+          : Object.keys(files).find((k) => /^xl\/worksheets\/sheet\d+\.xml$/i.test(k));
+
+      if (!sheetPath) throw new Error("No worksheet found in workbook.");
+
+      onProgress?.("Loading shared strings…");
+      const sharedStrings = files["xl/sharedStrings.xml"]
+        ? parseSharedStringsXml(fflate.strFromU8(files["xl/sharedStrings.xml"]))
+        : [];
+
+      onProgress?.("Reading worksheet (selected columns only)…");
+      const sheetXml = fflate.strFromU8(files[sheetPath]);
+      const columnsToLoad = getColumnsToLoad();
+
+      const scannedRows = [];
+      let pos = 0;
+
+      for (let i = 0; i < HEADER_SCAN_ROWS; i++) {
+        const rowStart = sheetXml.indexOf("<row ", pos);
+        if (rowStart === -1) break;
+        const rowEnd = sheetXml.indexOf("</row>", rowStart);
+        if (rowEnd === -1) break;
+        const chunk = sheetXml.slice(rowStart, rowEnd + 6);
+        const rm = chunk.match(/\br="(\d+)"/);
+        const sheetRow = rm ? parseInt(rm[1], 10) : i + 1;
+        const cells = parseCellsFromRowChunk(chunk, sharedStrings, null);
+        scannedRows.push({ sheetRow, values: cellsToWideRow(cells) });
+        pos = rowEnd + 6;
+      }
+
+      const headerIdx = findHeaderRowIndex(
+        scannedRows.map((r) => r.values),
+        getHeaderScanColumns()
+      );
+      if (headerIdx < 0) {
+        throw new Error(
+          "Could not find header row containing a LOOKUP_COLUMNS field. Check LOOKUP_COLUMNS in the page configuration."
+        );
+      }
+
+      const headerSheetRow = scannedRows[headerIdx].sheetRow;
+      const wideColMap = buildColumnMap(scannedRows[headerIdx].values);
+      const { slimColMap, wantedLetters, letterToSlimIdx, columnCount } = buildSlimColumnMaps(
+        scannedRows[headerIdx].values,
+        wideColMap,
+        columnsToLoad
+      );
+
+      const slimRows = [];
+      let rowCount = 0;
+
+      while (pos < sheetXml.length) {
+        const rowStart = sheetXml.indexOf("<row ", pos);
+        if (rowStart === -1) break;
+        const rowEnd = sheetXml.indexOf("</row>", rowStart);
+        if (rowEnd === -1) break;
+        const chunk = sheetXml.slice(rowStart, rowEnd + 6);
+        const rm = chunk.match(/\br="(\d+)"/);
+        const sheetRow = rm ? parseInt(rm[1], 10) : 0;
+        pos = rowEnd + 6;
+
+        if (sheetRow <= headerSheetRow) continue;
+
+        const cells = parseCellsFromRowChunk(chunk, sharedStrings, wantedLetters);
+        slimRows.push(buildSlimRow(cells, wantedLetters, letterToSlimIdx, columnCount));
+        rowCount++;
+
+        if (rowCount % YIELD_EVERY_ROWS === 0) {
+          onProgress?.("Indexing rows… " + rowCount.toLocaleString());
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        }
+      }
+
+      onProgress?.("Building lookup index…");
+      const { index, descriptionRows: descRows, dataRows } = buildMasterIndexFromRows(slimRows, slimColMap);
+      const returnCols = resolveReturnColumns(slimColMap);
+
+      if (returnCols.length === 0) {
+        throw new Error("No return columns from RETURN_COLUMNS were found in the master file.");
+      }
+
+      const sheetName = sheetPath.split("/").pop().replace(".xml", "");
+      return {
+        index,
+        descriptionRows: descRows,
+        colMap: slimColMap,
+        returnCols,
+        dataRows,
+        sheetName,
+        loadedColumns: columnsToLoad.length
+      };
+    }
+
+    function parseMasterWorkbookSheetJS(arrayBuffer) {
+      const workbook = XLSX.read(arrayBuffer, {
+        type: "array",
+        cellDates: false,
+        cellNF: false,
+        cellStyles: false
+      });
+      const sheetName = workbook.SheetNames[0];
+      const sheet = workbook.Sheets[sheetName];
+      const rows = XLSX.utils.sheet_to_json(sheet, {
+        header: 1,
+        defval: "",
+        raw: false
+      });
+
+      const headerIdx = findHeaderRowIndex(rows, getHeaderScanColumns());
+      if (headerIdx < 0) {
+        throw new Error(
+          "Could not find header row containing a LOOKUP_COLUMNS field. Check LOOKUP_COLUMNS in the page configuration."
+        );
+      }
+
+      const wideColMap = buildColumnMap(rows[headerIdx]);
+      const columnsToLoad = getColumnsToLoad();
+      const { slimColMap } = buildSlimColumnMaps(rows[headerIdx], wideColMap, columnsToLoad);
+      const slimRows = [];
+
+      for (let r = headerIdx + 1; r < rows.length; r++) {
+        const wide = rows[r] || [];
+        const slim = new Array(columnsToLoad.length).fill("");
+        columnsToLoad.forEach((name, idx) => {
+          const wideIdx = wideColMap[name];
+          if (wideIdx !== undefined) slim[idx] = wide[wideIdx] ?? "";
+        });
+        slimRows.push(slim);
+      }
+
+      const { index, descriptionRows: descRows, dataRows } = buildMasterIndexFromRows(slimRows, slimColMap);
+      const returnCols = resolveReturnColumns(slimColMap);
+
+      return {
+        index,
+        descriptionRows: descRows,
+        colMap: slimColMap,
+        returnCols,
+        dataRows,
+        sheetName,
+        loadedColumns: columnsToLoad.length
+      };
+    }
+
+    async function parseMasterWorkbook(arrayBuffer, onProgress) {
+      if (isXlsxZip(arrayBuffer)) {
+        try {
+          return await parseMasterWorkbookFast(arrayBuffer, onProgress);
+        } catch (err) {
+          console.warn("Fast column parse failed, falling back to SheetJS:", err);
+          onProgress?.("Falling back to full sheet read…");
+        }
+      }
+      return parseMasterWorkbookSheetJS(arrayBuffer);
+    }
+
+    masterFileInput.addEventListener("change", async (event) => {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+
+      showLoading("Reading and indexing master file…");
+      uploadStatus.className = "status";
+      masterIndex = null;
+      descriptionRows = null;
+      columnMap = null;
+      resolvedReturnColumns = [];
+      lastResults = [];
+      partInput.value = "";
+      partInput.disabled = true;
+      searchBtn.disabled = true;
+      downloadBtn.disabled = true;
+      searchStats.hidden = true;
+      copyOutputBlock.hidden = true;
+      copyOutput.value = "";
+      resultsArea.innerHTML = '<p class="empty-results">Upload a master file and run a search to see results.</p>';
+
+      try {
+        const buffer = await file.arrayBuffer();
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+
+        const parsed = await parseMasterWorkbook(buffer, (msg) => {
+          loadingMessage.textContent = msg;
+        });
+        masterIndex = parsed.index;
+        descriptionRows = parsed.descriptionRows;
+        columnMap = parsed.colMap;
+        resolvedReturnColumns = parsed.returnCols;
+
+        const colNote = parsed.loadedColumns
+          ? " (" + parsed.loadedColumns + " columns)"
+          : "";
+        setUploadStatus(
+          "Loaded " + parsed.dataRows.toLocaleString() + " rows from \"" + file.name + "\"" + colNote + ".",
+          "ok"
+        );
+
+        partInput.disabled = false;
+        searchBtn.disabled = false;
+      } catch (err) {
+        console.error(err);
+        setUploadStatus(err.message || "Failed to load the master file.", "err");
+      } finally {
+        hideLoading();
+        masterFileInput.value = "";
+      }
+    });
+
+    function emptyResultRecord(input) {
+      const record = { input, found: false, matchedVia: "", isBlank: !String(input).trim() };
+      for (const col of resolvedReturnColumns) record[col] = "";
+      return record;
+    }
+
+    function runSearch() {
+      if (!masterIndex || !columnMap) return;
+
+      const lines = partInput.value.split(/\r?\n/);
+      const hasQuery = lines.some((line) => line.trim());
+
+      if (!hasQuery) {
+        searchStats.hidden = true;
+        copyOutputBlock.hidden = true;
+        copyOutput.value = "";
+        resultsArea.innerHTML = '<p class="empty-results">Enter at least one part number to search.</p>';
+        lastResults = [];
+        downloadBtn.disabled = true;
+        return;
+      }
+
+      lastResults = lines.map((line) => {
+        const trimmed = line.trim();
+        if (!trimmed) return emptyResultRecord(line);
+
+        const hit = lookupHit(trimmed);
+        const found = Boolean(hit);
+        const record = {
+          input: line,
+          found,
+          matchedVia: found ? hit.matchedVia : "",
+          isBlank: false
+        };
+
+        if (found) {
+          for (const col of resolvedReturnColumns) {
+            record[col] = cellValue(hit.row, col);
+          }
+        } else {
+          for (const col of resolvedReturnColumns) {
+            record[col] = "";
+          }
+        }
+        return record;
+      });
+
+      const searchable = lastResults.filter((r) => !r.isBlank);
+      const matched = searchable.filter((r) => r.found).length;
+      searchStats.hidden = false;
+      searchStats.innerHTML =
+        "<strong>" + matched.toLocaleString() + "</strong> of <strong>" +
+        searchable.length.toLocaleString() + "</strong> matched.";
+
+      renderCopyOutput();
+      renderResultsTable();
+      downloadBtn.disabled = false;
+    }
+
+    function buildCopyOutputText() {
+      const col = getCopyOutputColumn();
+      return lastResults
+        .map((row) => {
+          if (row.isBlank) return "";
+          if (!row.found) return COPY_NOT_FOUND_PLACEHOLDER;
+          return formatCell(row[col] ?? "");
+        })
+        .join("\n");
+    }
+
+    function renderCopyOutput() {
+      if (lastResults.length === 0) {
+        copyOutputBlock.hidden = true;
+        copyOutput.value = "";
+        return;
+      }
+      copyOutput.value = buildCopyOutputText();
+      copyOutputBlock.hidden = false;
+    }
+
+    function renderResultsTable() {
+      if (lastResults.length === 0) {
+        resultsArea.innerHTML = '<p class="empty-results">No results to display.</p>';
+        return;
+      }
+
+      const headers = ["Searched Part Number", "Match Status", "Matched Via", ...resolvedReturnColumns];
+      const thead = "<tr>" + headers.map((h) => "<th>" + escapeHtml(h) + "</th>").join("") + "</tr>";
+
+      const tbody = lastResults.map((row) => {
+        const status = row.isBlank
+          ? ""
+          : row.found
+            ? '<span>Matched</span>'
+            : '<span class="not-found">Not Found</span>';
+        const cells = [
+          escapeHtml(row.input),
+          status,
+          row.found ? escapeHtml(row.matchedVia) : "",
+          ...resolvedReturnColumns.map((col) => escapeHtml(formatCell(row[col])))
+        ];
+        return "<tr>" + cells.map((c) => "<td>" + c + "</td>").join("") + "</tr>";
+      }).join("");
+
+      resultsArea.innerHTML =
+        '<div class="table-wrap"><table><thead>' + thead + '</thead><tbody>' + tbody + "</tbody></table></div>";
+    }
+
+    function formatCell(value) {
+      if (value === "" || value === null || value === undefined) return "";
+      if (value instanceof Date) return value.toLocaleDateString();
+      return String(value);
+    }
+
+    function escapeHtml(text) {
+      return String(text)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function downloadResults() {
+      if (lastResults.length === 0) return;
+
+      const headers = ["Searched Part Number", "Match Status", "Matched Via", ...resolvedReturnColumns];
+      const rows = lastResults.map((row) => [
+        row.input,
+        row.found ? "Matched" : "Not Found",
+        row.matchedVia ?? "",
+        ...resolvedReturnColumns.map((col) => row[col] ?? "")
+      ]);
+
+      const sheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, sheet, "Lookup Results");
+      XLSX.writeFile(workbook, "part-lookup-results.xlsx");
+    }
+
+    copyOutputBtn.addEventListener("click", async () => {
+      const text = copyOutput.value;
+      if (!text && !lastResults.length) return;
+      try {
+        await navigator.clipboard.writeText(text);
+        const label = copyOutputBtn.textContent;
+        copyOutputBtn.textContent = "Copied!";
+        setTimeout(() => { copyOutputBtn.textContent = label; }, 1500);
+      } catch (err) {
+        copyOutput.focus();
+        copyOutput.select();
+        document.execCommand("copy");
+      }
+    });
+
+    searchBtn.addEventListener("click", runSearch);
+    downloadBtn.addEventListener("click", downloadResults);
+  </script>
+</body>
+</html>
